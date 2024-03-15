@@ -3,7 +3,6 @@ from google.cloud import storage
 import tempfile
 
 
-# Assuming your GCS credentials are stored in Streamlit's secrets
 def create_gcs_client():
     creds = st.secrets['connections']['gcs']
     client = storage.Client.from_service_account_info(creds)
