@@ -1,6 +1,6 @@
 import streamlit as st
-from google.cloud import storage
 import tempfile
+from google.cloud import storage
 
 
 def create_gcs_client():

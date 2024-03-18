@@ -8,12 +8,12 @@ import pandas as pd
 import streamlit as st
 from openai import OpenAI
 from st_files_connection import FilesConnection
+from tempfile import NamedTemporaryFile
 
 from vectorrx.utils import download_file_from_gcs
 
-
 MOA_EMBEDDING_IDX = 'gs://hx-karen/fda_drugs/moa_embeddings_norm_v2.index'
-DRUG_METADATA = 'gs://hx-karen/fda_drugs/metadata_v2.pkl'
+DRUG_METADATA = 'gs://hx-karen/fda_drugs/metadata_v2.1.pkl'
 
 FDA_DRUG_PREFIX = 'https://www.accessdata.fda.gov/scripts/cder/daf/index.cfm?event=overview.process&ApplNo='
 
@@ -45,9 +45,14 @@ class DrugsSearchEngine:
     @st.cache_data
     def __get_drug_data() -> tuple[pd.DataFrame, str, list[list[str]]]:
         """Download the tsv and load into a dataframe"""
+        with NamedTemporaryFile() as temp_pkl:
+            conn = st.connection('gcs', type=FilesConnection)
+            with conn.open(path=DRUG_METADATA, mode='rb') as f:
+                pkl = pickle.load(f)
         conn = st.connection('gcs', type=FilesConnection)
         with conn.open(path=DRUG_METADATA, mode='rb') as f:
             pkl = pickle.load(f)
+
         df = pkl['df']
         model = pkl['metadata']['embedding_model']
         moa_summaries = pkl['metadata']['moa_summaries']
@@ -100,9 +105,9 @@ class DrugsSearchEngine:
         assert query_string or in_keyword, 'Query string or in_keyword must be provided'
 
         if query_string:
-            q_embedding = self.get_embedding(query_string)  # convert string to vector
-            faiss.normalize_L2(q_embedding)  # for cosine similarity
-            raw_df = self.search_most_similar_moa(q_embedding, k)
+            xq = self.get_embedding(query_string)  # convert string to vector
+            faiss.normalize_L2(xq)  # for cosine similarity
+            raw_df = self.search_most_similar_moa(xq, k)
         else:  # keyword searches only
             raw_df = self.drug_df
             raw_df[f'moa_cosine_similarity'] = 1

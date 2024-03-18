@@ -16,7 +16,7 @@ semantically similar drugs. You can also include or exclude keywords to narrow d
 """)
 
 search_engine = DrugsSearchEngine()
-moa_query = st.text_input('Mechanism of Action Query', 'Topoisomerase inhibitor')
+moa_query = st.text_input('Mechanism of Action Query [free text]', 'something that blocks topoisomerase')
 
 col1, col2 = st.columns(2)
 with col1:
