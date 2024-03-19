@@ -16,13 +16,14 @@ There are two ways to perform a search:
 1. Enter a mechanism of action as free text and set a similarity threshold. This method uses the underlying \
 semantics of your query to find similar drugs. Higher similarity threshold will return fewer but more \
 semantically similar drugs. You can also include or exclude keywords to narrow down the results.
-2. Leave the mechanism of action field empty and use the include and exclude keywords to search for drugs.
+2. Leave the mechanism of action field empty and use the include and exclude keywords to search for drugs.""")
 
+st.success("""
 **Why embeddings?** Embeddings are a way to represent text as vectors in a high-dimensional space. They provide a \
 nuanced search capability by not strictly adhering to exact terms, enabling users to adjust the similarity threshold \
 to explore drugs with related actions. However, it's worth noting that this could increase the chance of \
 encountering false positives, as it broadens the search to include a wide array of potentially related things.
-""")
+""", icon='📈')
 
 moa_query = st.text_input('Mechanism of Action Query [free text]', 'something that blocks topoisomerase')
 
@@ -45,7 +46,7 @@ if search_button:
         # Add a histogram of the cosine similarity scores
         warning_msg = ('Please be aware that text embeddings are based on the underlying semantics of the text and '
                        'there are no hard boundaries for similarity scores. Please adjust the threshold accordingly.')
-        st.write(f'⚠️ {warning_msg}')
+        st.info(warning_msg, icon='⚠')
 
         fig = px.histogram(df, x='Moa Cosine Similarity', nbins=20)
         plot_title = 'Distribution of cosine similarity scores from the search results'
