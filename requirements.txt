@@ -1,0 +1,10 @@
+faiss-cpu
+gcsfs
+openai
+pandas
+pip
+plotly
+python
+scikit-learn
+streamlit
+st-files-connection

@@ -1,16 +1,16 @@
 # mamba env update -n vectorrx -f "environment.yml"
-name: vectorrx
+#name: vectorrx
 channels:
 - conda-forge
 dependencies:
 - faiss-cpu
-- gcsfs
-- openai
-- pandas
-- pip
-- plotly
-- python
-- scikit-learn
-- streamlit
-- pip:
-  - st-files-connection
+#- gcsfs
+#- openai
+#- pandas
+#- pip
+#- plotly
+#- python
+#- scikit-learn
+#- streamlit
+#- pip:
+#  - st-files-connection
