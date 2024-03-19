@@ -3,14 +3,14 @@ name: vectorrx
 channels:
 - conda-forge
 dependencies:
-- faiss-cpu=1.7.4
-- gcsfs=2024.2.0
-- openai=1.14.0
-- pandas=2.2.1
-- pip=24.0
-- plotly=5.19.0
-- python=3.11.8
-- scikit-learn=1.4.1.post1
-- streamlit=1.32.2
+- faiss-cpu
+- gcsfs
+- openai
+- pandas
+- pip
+- plotly
+- python
+- scikit-learn
+- streamlit
 - pip:
   - st-files-connection
