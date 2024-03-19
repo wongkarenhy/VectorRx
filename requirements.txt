@@ -2,7 +2,6 @@ faiss-cpu
 gcsfs
 openai
 plotly
-python
 scikit-learn
 streamlit
 st-files-connection
