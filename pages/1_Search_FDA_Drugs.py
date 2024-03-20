@@ -1,13 +1,12 @@
 import plotly.express as px
 import streamlit as st
-from search import DrugsSearchEngine
 
+from search import get_search_engine_instance
+
+search_engine = get_search_engine_instance()
 
 st.set_page_config(page_title='Vector Rx', page_icon=':pill:', layout='wide')
-
 st.subheader(':pill: Search FDA Approved Drugs by Mechanism of Action')
-
-search_engine = DrugsSearchEngine()
 st.write(f'[Data Source: OpenFDA](https://open.fda.gov/data/downloads/) - Last Accessed: {search_engine.last_updated}')
 
 st.write("""

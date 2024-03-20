@@ -5,7 +5,7 @@ import plotly.graph_objs as go
 from sklearn.manifold import TSNE
 import streamlit as st
 
-from search import DrugsSearchEngine
+from search import get_search_engine_instance
 
 
 def match_structure(original_list, list_of_lists):
@@ -23,7 +23,8 @@ def get_cluster_assignments(xb, k):
 
 @st.cache_data
 def plot_moa_tsne(k=24):
-    search_engine = DrugsSearchEngine()
+    search_engine = get_search_engine_instance()
+
     drug_brand_names = match_structure(search_engine.df['brand_name'].tolist(), search_engine.moa_summaries)
     drug_moa = match_structure(search_engine.df['pharm_class_moa'].fillna('').tolist(), search_engine.moa_summaries)
     drug_pe = match_structure(search_engine.df['pharm_class_pe'].fillna('').tolist(), search_engine.moa_summaries)

@@ -144,3 +144,13 @@ class DrugsSearchEngine:
 
         # Drop the Application Number column and reset index
         return filtered_df.drop(columns=['Application Number']).reset_index(drop=True)
+
+
+_search_engine_instance = None
+
+
+def get_search_engine_instance():
+    global _search_engine_instance
+    if _search_engine_instance is None:
+        _search_engine_instance = DrugsSearchEngine()
+    return _search_engine_instance
