@@ -63,8 +63,10 @@ def plot_moa_tsne(k=24):
 
     grid = dict(showgrid=False, zeroline=False, showticklabels=False)
     plot_title = 't-SNE Visualization of Mechanism of Action Embeddings'
-    plot_subtitle = (f'Color represents unsupervised K-means clustering of the embeddings using k={k}. '
+    plot_subtitle = (f'Color represents unsupervised K-means clustering of the embeddings using k={k}.<br>'
                      'Embeddings are generated using section 12.1 (mechanism_of_action) of the FDA drug labels.')
     title_text = {'text': f'{plot_title}<br><sub>{plot_subtitle}</sub>'}
 
-    return fig.update_layout(width=1000, height=800, plot_bgcolor='white', title=title_text, xaxis=grid, yaxis=grid)
+    # Inject custom CSS
+    st.markdown("""<style>.stPlotlyChart {height: 90vh; width: 70vw}</style>""", unsafe_allow_html=True)
+    return fig.update_layout(plot_bgcolor='white', title=title_text, xaxis=grid, yaxis=grid)
