@@ -6,6 +6,8 @@ dependencies:
 - faiss-cpu=1.7.4
 - gcsfs=2024.2.0
 - openai=1.13.3
+- numpy==1.26.4
+- pandas==2.2.1
 - pip=24.0
 - plotly=5.19.0
 - python=3.11.8

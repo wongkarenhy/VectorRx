@@ -1,5 +1,6 @@
 import faiss
 import numpy as np
+import pandas as pd
 import plotly.express as px
 import plotly.graph_objs as go
 from sklearn.manifold import TSNE
@@ -22,35 +23,30 @@ def get_cluster_assignments(xb, k):
 
 
 @st.cache_data
-def plot_moa_tsne(k=24):
+def plot_moa_tsne(k=24) -> pd.DataFrame:
     search_engine = get_search_engine_instance()
 
-    drug_brand_names = match_structure(search_engine.df['brand_name'].tolist(), search_engine.moa_summaries)
-    drug_moa = match_structure(search_engine.df['pharm_class_moa'].fillna('').tolist(), search_engine.moa_summaries)
-    drug_pe = match_structure(search_engine.df['pharm_class_pe'].fillna('').tolist(), search_engine.moa_summaries)
-    drug_cs = match_structure(search_engine.df['pharm_class_cs'].fillna('').tolist(), search_engine.moa_summaries)
-    drug_epc = match_structure(search_engine.df['pharm_class_epc'].fillna('').tolist(), search_engine.moa_summaries)
-
-    drug_brand_names = [d.upper() for d in drug_brand_names]
+    # Operate match_structure on the entire dataframe
+    df_copy = search_engine.df.copy(deep=True)
+    df_copy = df_copy.iloc[match_structure(df_copy.index.tolist(), search_engine.moa_summaries)]
+    df_copy = df_copy.reset_index(drop=True)
+    df_copy['brand_name'] = df_copy['brand_name'].str.upper()
 
     # Returns the original L2 normalized embeddings
     xb = search_engine.moa_faiss_index.reconstruct_n()
 
+    assert len(df_copy['brand_name']) == xb.shape[0]
+
     # Remove duplicates by drug brand name
-    unique_drugs, indices = np.unique(drug_brand_names, return_index=True)
+    unique_drugs, indices = np.unique(df_copy['brand_name'], return_index=True)
     xb = xb[indices]
-    drug_moa = [drug_moa[i] for i in indices]
-    drug_pe = [drug_pe[i] for i in indices]
-    drug_cs = [drug_cs[i] for i in indices]
-    drug_epc = [drug_epc[i] for i in indices]
+    df_copy = df_copy.iloc[indices]
 
-    hover_text = [(f'{drug}<br><br>[FDA Pharmacologic Class Labels]<br>MOA: {moa}<br>Physiologic Effect: '
-                   f'{pe}<br>Chemical Structure: {cs}<br>Established Pharmacologic Class: {epc}')
-                  for drug, moa, pe, cs, epc in zip(unique_drugs, drug_moa, drug_pe, drug_cs, drug_epc)]
-
-    # Let's perform K-means clustering to color the points
+    # Perform K-means clustering to color the points
     color_map = px.colors.qualitative.Light24
-    colors = [color_map[label[0]] for label in get_cluster_assignments(xb, k)]  # uses K-means clustering
+    cluster_assignment = get_cluster_assignments(xb, k)
+    colors = [color_map[label[0]] for label in cluster_assignment]  # uses K-means clustering
+    df_copy['cluster_assignment'] = cluster_assignment
 
     # TSNE
     tsne = TSNE(n_components=2, random_state=0)
@@ -58,10 +54,16 @@ def plot_moa_tsne(k=24):
 
     x_ = projections[:, 0]
     y_ = projections[:, 1]
+
+    hover_text = [(f'Cluster #{row.cluster_assignment}<br><br>{row.brand_name}<br>'
+                   f'<br>[FDA Pharmacologic Class Labels]<br>'
+                   f'MOA: {row.pharm_class_moa}<br>Physiologic Effect: {row.pharm_class_pe}<br>'
+                   f'Chemical Structure: {row.pharm_class_cs}<br>'
+                   f'Established Pharmacologic Class: {row.pharm_class_epc}')
+                  for row in df_copy.itertuples()]
     fig = go.Figure(data=go.Scatter(x=x_, y=y_, mode='markers', text=hover_text, hoverinfo='text',
                                     marker=dict(color=colors, opacity=0.5)))
 
-    grid = dict(showgrid=False, zeroline=False, showticklabels=False)
     plot_title = 't-SNE Visualization of Mechanism of Action Embeddings'
     plot_subtitle = (f'Color represents unsupervised K-means clustering of the embeddings using k={k}.<br>'
                      'Embeddings are generated using section 12.1 (mechanism_of_action) of the FDA drug labels.')
@@ -69,4 +71,24 @@ def plot_moa_tsne(k=24):
 
     # Inject custom CSS
     st.markdown("""<style>.stPlotlyChart {height: 90vh; width: 70vw}</style>""", unsafe_allow_html=True)
-    return fig.update_layout(plot_bgcolor='white', title=title_text, xaxis=grid, yaxis=grid)
+    grid = dict(showgrid=False, zeroline=False, showticklabels=False)
+    fig = fig.update_layout(plot_bgcolor='white', title=title_text, xaxis=grid, yaxis=grid)
+
+    st.plotly_chart(fig)
+
+    return df_copy
+
+
+def display_cluster_info(df: pd.DataFrame) -> None:
+    cols = ['brand_name', 'pharm_class_moa', 'pharm_class_pe', 'pharm_class_cs', 'pharm_class_epc']
+
+    container = st.container()
+    with container:
+        for c in sorted(df.cluster_assignment.unique()):
+            df_subset = df[df.cluster_assignment == c].copy()
+            df_subset = df_subset[cols].fillna('')
+            display_data = df_subset.sort_values(by='brand_name').reset_index(drop=True)
+
+            # Use an expander for each cluster
+            with st.expander(f"Cluster #{c}"):
+                st.table(display_data)
