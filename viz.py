@@ -14,6 +14,7 @@ def match_structure(original_list, list_of_lists):
     return [item for item, sublist in zip(original_list, list_of_lists) for _ in sublist]
 
 
+@st.cache_data
 def get_cluster_assignments(xb, k):
     """Perform K-means clustering on the embeddings"""
     kmeans = faiss.Kmeans(d=xb.shape[1], k=k, niter=20, verbose=True)
@@ -23,14 +24,14 @@ def get_cluster_assignments(xb, k):
 
 
 @st.cache_data
-def plot_moa_tsne(k=24) -> pd.DataFrame:
+def get_cleaned_data() -> tuple[pd.DataFrame, np.array]:
     search_engine = get_search_engine_instance()
 
     # Operate match_structure on the entire dataframe
     df_copy = search_engine.df.copy(deep=True)
     df_copy = df_copy.iloc[match_structure(df_copy.index.tolist(), search_engine.moa_summaries)]
     df_copy = df_copy.reset_index(drop=True)
-    df_copy['brand_name'] = df_copy['brand_name'].str.upper()
+    df_copy['brand_name'] = df_copy['brand_name'].str.upper().str.strip()
 
     # Returns the original L2 normalized embeddings
     xb = search_engine.moa_faiss_index.reconstruct_n()
@@ -41,17 +42,27 @@ def plot_moa_tsne(k=24) -> pd.DataFrame:
     unique_drugs, indices = np.unique(df_copy['brand_name'], return_index=True)
     xb = xb[indices]
     df_copy = df_copy.iloc[indices]
+    return df_copy, xb
+
+
+@st.cache_data
+def get_tsne_projections(xb: np.array) -> np.array:
+    tsne = TSNE(n_components=2, random_state=0)
+    return tsne.fit_transform(xb)
+
+
+@st.cache_data
+def plot_moa_tsne(k=24) -> pd.DataFrame:
+    df, xb = get_cleaned_data()
 
     # Perform K-means clustering to color the points
     color_map = px.colors.qualitative.Light24
     cluster_assignment = get_cluster_assignments(xb, k)
     colors = [color_map[label[0]] for label in cluster_assignment]  # uses K-means clustering
-    df_copy['cluster_assignment'] = cluster_assignment
+    df['cluster_assignment'] = cluster_assignment
 
     # TSNE
-    tsne = TSNE(n_components=2, random_state=0)
-    projections = tsne.fit_transform(xb)
-
+    projections = get_tsne_projections(xb)
     x_ = projections[:, 0]
     y_ = projections[:, 1]
 
@@ -60,7 +71,7 @@ def plot_moa_tsne(k=24) -> pd.DataFrame:
                    f'MOA: {row.pharm_class_moa}<br>Physiologic Effect: {row.pharm_class_pe}<br>'
                    f'Chemical Structure: {row.pharm_class_cs}<br>'
                    f'Established Pharmacologic Class: {row.pharm_class_epc}')
-                  for row in df_copy.itertuples()]
+                  for row in df.itertuples()]
     fig = go.Figure(data=go.Scatter(x=x_, y=y_, mode='markers', text=hover_text, hoverinfo='text',
                                     marker=dict(color=colors, opacity=0.5)))
 
@@ -76,7 +87,7 @@ def plot_moa_tsne(k=24) -> pd.DataFrame:
 
     st.plotly_chart(fig)
 
-    return df_copy
+    return df
 
 
 def display_cluster_info(df: pd.DataFrame) -> None:
