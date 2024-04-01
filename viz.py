@@ -29,7 +29,7 @@ def get_cleaned_data() -> tuple[pd.DataFrame, np.array]:
 
     # Operate match_structure on the entire dataframe
     df_copy = search_engine.df.copy(deep=True)
-    df_copy = df_copy.iloc[match_structure(df_copy.index.tolist(), search_engine.moa_summaries)]
+    df_copy = df_copy.iloc[match_structure(df_copy.index.tolist(), search_engine.metadata['moa_summaries'])]
     df_copy = df_copy.reset_index(drop=True)
     df_copy['brand_name'] = df_copy['brand_name'].str.upper().str.strip()
 

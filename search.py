@@ -1,5 +1,5 @@
 import pickle
-import re
+from enum import Enum
 from itertools import chain, count
 
 import faiss
@@ -11,16 +11,18 @@ from st_files_connection import FilesConnection
 from tempfile import NamedTemporaryFile
 
 
-FDA_DRUG_PREFIX = 'https://www.accessdata.fda.gov/scripts/cder/daf/index.cfm?event=overview.process&ApplNo='
+class SearchMode(Enum):
+    MOA = 'moa'
+    AR = 'adverse_reactions'
 
 
 class DrugsSearchEngine:
     def __init__(self):
         self.client = self.__setup_openai_client()
         self.conn = st.connection('gcs', type=FilesConnection)
-        self.moa_faiss_index = self.__get_moa_faiss_index()
-        self.__df, self.__embedding_model, self.__moa_summaries, self.__last_updated = self.__get_drug_data()
-        self.moa_mapping = self.__get_moa_mapping()
+        self.ar_faiss_index, self.moa_faiss_index = self.__get_indices()
+        self.__df, self.__metadata = self.__get_drug_data()
+        self.moa_mapping, self.ar_mapping = self.__get_mappings()
 
         self.__validate_data_integrity()
 
@@ -29,121 +31,104 @@ class DrugsSearchEngine:
         return self.__df
 
     @property
-    def embedding_model(self) -> str:
-        return self.__embedding_model
-
-    @property
-    def moa_summaries(self) -> list[list[str]]:
-        return self.__moa_summaries
-
-    @property
-    def last_updated(self) -> str:
-        return self.__last_updated
+    def metadata(self) -> dict:
+        return self.__metadata
 
     def __repr__(self):
         return (f"{self.__class__.__name__}("
                 f"Number of Drugs={len(self.df)}, "
-                f"Data Last Accessed='{self.last_updated}', "
-                f"Embedding Model='{self.embedding_model}')")
+                f"Data Last Accessed={self.metadata['last_updated']}, "
+                f"Embedding Model={self.metadata['embedding_model']}) ")
 
     def __validate_data_integrity(self) -> None:
-        assert len(self.moa_summaries) == len(self.df), 'Length of moa_summaries and df should match'
-        assert len(list(chain(*self.moa_summaries))) == self.moa_faiss_index.ntotal, \
-            'Length of flattened moa_summaries and faiss_index should match'
+        assert len(self.metadata['moa_summaries']) == len(self.df), 'Length of moa_summaries and df should match'
+        assert len(self.metadata['ar_summaries']) == len(self.df), 'Length of ar_summaries and df should match'
+        assert len(list(chain(*self.metadata['moa_summaries']))) == self.moa_faiss_index.ntotal, \
+            'Length of flattened moa_summaries and its faiss_index should match'
+        assert len(list(chain(*self.metadata['ar_summaries']))) == self.ar_faiss_index.ntotal, \
+            'Length of flattened ar_summaries and its faiss_index should match'
 
     @staticmethod
     def __setup_openai_client() -> OpenAI:
         return OpenAI(api_key=st.secrets['OPENAI_API_KEY'])
 
     @st.cache_data
-    def __get_moa_faiss_index(_self) -> faiss.IndexFlatIP:
-        """Download the moa index from GCS to a temporary directory and load it into faiss."""
-        with NamedTemporaryFile() as temp_idx, _self.conn.open(path=st.secrets['MOA_EMBEDDING_IDX'], mode='rb') as f:
-            temp_idx.write(f.read())
-            return faiss.read_index(temp_idx.name)
+    def __get_indices(_self) -> tuple[faiss.IndexPQ, faiss.IndexFlatIP]:
+        """Download the adverse reactions index from GCS to a temporary directory and load it into faiss."""
+        indices = {}
+        for i in ['AR_EMBEDDING_IDX', 'MOA_EMBEDDING_IDX']:
+            with NamedTemporaryFile() as temp_idx, _self.conn.open(path=st.secrets[i], mode='rb') as f:
+                temp_idx.write(f.read())
+                indices[i] = faiss.read_index(temp_idx.name)
+        return indices['AR_EMBEDDING_IDX'], indices['MOA_EMBEDDING_IDX']
 
     @st.cache_data
-    def __get_drug_data(_self) -> tuple[pd.DataFrame, str, list[list[str]], str]:
+    def __get_drug_data(_self) -> tuple[pd.DataFrame, dict]:
         """Download the tsv and load into a dataframe"""
         with _self.conn.open(path=st.secrets['DRUG_METADATA'], mode='rb') as f:
             pkl = pickle.load(f)
+        return pkl['df'], pkl['metadata']
 
-        df = pkl['df']
-        model = pkl['metadata']['embedding_model']
-        moa_summaries = pkl['metadata']['moa_summaries']
-        last_updated = pkl['metadata']['last_updated']
-        return df, model, moa_summaries, last_updated  # moa_summaries are what get used for the vector embeddings
-
-    def __get_moa_mapping(self) -> dict[int, int]:
+    def __get_mappings(self) -> tuple[dict[int, int], dict[int, int]]:
         """
         Each drug can have multiple active ingredients or components and each component has a mechanism of action. This
         mapping is used to map the flattened moa_summaries to the original index in the dataframe (per drug).
         """
-        counter = count()
-        return {next(counter): i for i, moa in enumerate(self.__moa_summaries) for _ in moa}
+        moa_counter = count()
+        moa_mapping = {next(moa_counter): i for i, moa in enumerate(self.metadata['moa_summaries']) for _ in moa}
+        ar_counter = count()
+        ar_mapping = {next(ar_counter): i for i, ar in enumerate(self.metadata['ar_summaries']) for _ in ar}
+        return moa_mapping, ar_mapping
 
-    def get_original_index(self, flattened_index: int) -> int:
+    def get_original_index(self, mode, flattened_index: int) -> int:
         """Map the flattened index to the original index in the dataframe."""
-        return self.moa_mapping[flattened_index]
+        mapping = self.moa_mapping if mode == SearchMode.MOA else self.ar_mapping
+        return mapping[flattened_index]
 
     @st.cache_data
     def get_embedding(_self, chunk) -> np.array:
-        response = _self.client.embeddings.create(input=chunk, model=_self.embedding_model)
+        response = _self.client.embeddings.create(input=chunk, model=_self.metadata['embedding_model'])
         embedding = response.data[0].embedding
         return np.array([embedding]).astype(np.float32)
 
-    @staticmethod
-    def __format_link(x) -> str:
-        """Extract only digits from the string."""
-        x = re.sub(r'\D', '', x)
-        return f'{FDA_DRUG_PREFIX}{x}'
+    def search_most_similar(self, mode: SearchMode, xq: np.array, k: int) -> pd.DataFrame:
+        """Find the k-nearest most similar MOA or AR based on the query embedding."""
+        index = self.moa_faiss_index if mode == SearchMode.MOA else self.ar_faiss_index
+        d, i = index.search(xq, k)
+        # Remove i == -1 and the corresponding cosine similarity scores
+        removed_indices = np.where(i[0] == -1)
+        i = np.delete(i[0], removed_indices)
+        d = np.delete(d[0], removed_indices)
 
-    @staticmethod
-    def __clean_up_column_names(column_names: list) -> list[str]:
-        return [c.replace('_', ' ').title() for c in column_names]
-
-    def search_most_similar_moa(self, xq: np.array, k: int) -> pd.DataFrame:
-        """Find the most similar MOA based on the query embedding."""
-        d, i = self.moa_faiss_index.search(xq, k)
-        transformed_i = [self.get_original_index(x) for x in i[0]]
+        transformed_i = [self.get_original_index(mode, x) for x in i]
         # Add cosine similarity as a column to drug_data
         filtered_df = self.df.iloc[transformed_i]
-        filtered_df['moa_cosine_similarity'] = d[0]
+        filtered_df['cosine_similarity'] = d
 
-        cols_for_dedupe = [c for c in filtered_df.columns if c not in {'moa_cosine_similarity'}]
+        cols_for_dedupe = [c for c in filtered_df.columns if c != 'cosine_similarity']
         return filtered_df.drop_duplicates(subset=cols_for_dedupe, keep='first')
 
-    def query(self, query_string: str, k: int, similarity_threshold: float, in_keyword: str, ex_keyword: str) \
-            -> pd.DataFrame:
+    def query(self, mode: SearchMode, query_string: str, threshold: float, in_keyword: str, ex_keyword: str) -> pd.DataFrame:
         if not query_string and not in_keyword:
-            raise ValueError('Query string or in_keyword must be provided')
+            raise ValueError('Must provide either a query string or an include keyword.')
 
         if query_string:
             xq = self.get_embedding(query_string)  # convert string to vector
             faiss.normalize_L2(xq)  # for cosine similarity
-            raw_df = self.search_most_similar_moa(xq, k)
+            raw_df = self.search_most_similar(mode, xq, k=10000)
         else:  # keyword searches only
             raw_df = self.df
-            raw_df[f'moa_cosine_similarity'] = 1  # assumes full similarity for keyword-based searches
+            raw_df[f'cosine_similarity'] = 1  # assumes full similarity for keyword-based searches
 
-        filtered_df = raw_df[raw_df['moa_cosine_similarity'] > similarity_threshold]
+        filtered_df = raw_df[raw_df['cosine_similarity'] > threshold]
 
         # Filter by keyword
         if in_keyword:
-            filtered_df = filtered_df[filtered_df['moa'].str.contains(in_keyword, case=False)]
+            filtered_df = filtered_df[filtered_df[mode.value].str.contains(in_keyword, case=False)]
 
         if ex_keyword:
-            filtered_df = filtered_df[~filtered_df['moa'].str.contains(ex_keyword, case=False)]
-
-        # Clean up column names
-        filtered_df.columns = self.__clean_up_column_names(filtered_df.columns)
-
-        # Add FDA link
-        filtered_df['FDA Link'] = [self.__format_link(x) if not pd.isna(x)
-                                   else None for x in filtered_df['Application Number']]
-
-        # Drop the Application Number column and reset index
-        return filtered_df.drop(columns=['Application Number']).reset_index(drop=True)
+            filtered_df = filtered_df[~filtered_df[mode.value].str.contains(ex_keyword, case=False)]
+        return filtered_df
 
 
 _search_engine_instance = None
