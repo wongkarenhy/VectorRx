@@ -1,14 +1,15 @@
 import pickle
 from enum import Enum
 from itertools import chain, count
+from tempfile import NamedTemporaryFile
 
 import faiss
 import numpy as np
 import pandas as pd
 import streamlit as st
 from openai import OpenAI
-from st_files_connection import FilesConnection
-from tempfile import NamedTemporaryFile
+
+from connections import get_contents
 
 
 class SearchMode(Enum):
@@ -19,7 +20,6 @@ class SearchMode(Enum):
 class DrugsSearchEngine:
     def __init__(self):
         self.client = self.__setup_openai_client()
-        self.conn = st.connection('gcs', type=FilesConnection)
         self.ar_faiss_index, self.moa_faiss_index = self.__get_indices()
         self.__df, self.__metadata = self.__get_drug_data()
         self.moa_mapping, self.ar_mapping = self.__get_mappings()
@@ -57,16 +57,19 @@ class DrugsSearchEngine:
         """Download the adverse reactions index from GCS to a temporary directory and load it into faiss."""
         indices = {}
         for i in ['AR_EMBEDDING_IDX', 'MOA_EMBEDDING_IDX']:
-            with NamedTemporaryFile() as temp_idx, _self.conn.open(path=st.secrets[i], mode='rb') as f:
-                temp_idx.write(f.read())
+            bucket_name, path = st.secrets[i].replace('gs://', '').split('/', 1)
+            f_obj = get_contents(bucket_name, path)
+            with NamedTemporaryFile() as temp_idx:
+                temp_idx.write(f_obj.read())
                 indices[i] = faiss.read_index(temp_idx.name)
         return indices['AR_EMBEDDING_IDX'], indices['MOA_EMBEDDING_IDX']
 
     @st.cache_data
     def __get_drug_data(_self) -> tuple[pd.DataFrame, dict]:
         """Download the tsv and load into a dataframe"""
-        with _self.conn.open(path=st.secrets['DRUG_METADATA'], mode='rb') as f:
-            pkl = pickle.load(f)
+        bucket_name, path = st.secrets['DRUG_METADATA'].replace('gs://', '').split('/', 1)
+        f_obj = get_contents(bucket_name, path)
+        pkl = pickle.load(f_obj)
         return pkl['df'], pkl['metadata']
 
     def __get_mappings(self) -> tuple[dict[int, int], dict[int, int]]:

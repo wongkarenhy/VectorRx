@@ -11,6 +11,10 @@ def __format_link(x) -> str:
     return f'https://www.accessdata.fda.gov/scripts/cder/daf/index.cfm?event=overview.process&ApplNo={x}'
 
 
+def __clean_up_column_names(column_names: list) -> list[str]:
+    return [c.replace('_', ' ').title().replace('Moa', 'MOA').replace('Ar', 'AR') for c in column_names]
+
+
 def clean_up(df: pd.DataFrame, records: int) -> pd.DataFrame:
     df.columns = __clean_up_column_names(df.columns)
 
@@ -22,10 +26,6 @@ def clean_up(df: pd.DataFrame, records: int) -> pd.DataFrame:
     cols = ['FDA Link'] + [c for c in df.columns if c != 'FDA Link']
     df = df[cols]
     return df.head(records)
-
-
-def __clean_up_column_names(column_names: list) -> list[str]:
-    return [c.replace('_', ' ').title().replace('Moa', 'MOA').replace('Ar', 'AR') for c in column_names]
 
 
 def add_histograms(df: pd.DataFrame):
