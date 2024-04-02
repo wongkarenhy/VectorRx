@@ -72,8 +72,9 @@ def plot_moa_tsne(k=24) -> pd.DataFrame:
                    f'Chemical Structure: {row.pharm_class_cs}<br>'
                    f'Established Pharmacologic Class: {row.pharm_class_epc}')
                   for row in df.itertuples()]
-    fig = go.Figure(data=go.Scatter(x=x_, y=y_, mode='markers', text=hover_text, hoverinfo='text',
-                                    marker=dict(color=colors, opacity=0.5)))
+    marker_config = dict(color=colors, opacity=0.6)
+    fig = go.Figure(data=go.Scatter(x=x_, y=y_, mode='markers', text=hover_text, hoverinfo='text', marker=marker_config))
+    fig.update_traces(marker=dict(size=10, line=dict(width=1, color='DarkSlateGrey')))
 
     plot_title = 't-SNE Visualization of Mechanism of Action Embeddings'
     plot_subtitle = (f'Color represents unsupervised K-means clustering of the embeddings using k={k}.<br>'
