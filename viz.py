@@ -89,18 +89,3 @@ def plot_moa_tsne(k=24) -> pd.DataFrame:
     st.plotly_chart(fig)
 
     return df
-
-
-def display_cluster_info(df: pd.DataFrame) -> None:
-    cols = ['brand_name', 'pharm_class_moa', 'pharm_class_pe', 'pharm_class_cs', 'pharm_class_epc']
-
-    container = st.container()
-    with container:
-        for c in sorted(df.cluster_assignment.unique()):
-            df_subset = df[df.cluster_assignment == c].copy()
-            df_subset = df_subset[cols].fillna('')
-            display_data = df_subset.sort_values(by='brand_name').reset_index(drop=True)
-
-            # Use an expander for each cluster
-            with st.expander(f"Cluster #{c}"):
-                st.table(display_data)
