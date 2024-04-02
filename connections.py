@@ -10,7 +10,7 @@ def get_cred():
             "type": st.secrets['GCS_TYPE'],
             "project_id": st.secrets['GCS_PROJECT_ID'],
             "private_key_id": st.secrets['GCS_PRIVATE_KEY_ID'],
-            "private_key": st.secrets['GCS_PRIVATE_KEY'],
+            "private_key": st.secrets['GCS_PRIVATE_KEY'].replace('\\n', '\n'),
             "client_email": st.secrets['GCS_CLIENT_EMAIL'],
             "client_id": st.secrets['GCS_CLIENT_ID'],
             "auth_uri": st.secrets['GCS_AUTH_URI'],
