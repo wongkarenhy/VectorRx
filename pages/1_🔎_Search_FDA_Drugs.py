@@ -49,26 +49,26 @@ search_button = st.button('Search')
 
 # Search action
 if search_button:
-    moa_df, ar_df = pd.DataFrame(), pd.DataFrame()
+    moa_df, ar_df, res_df = pd.DataFrame(), pd.DataFrame(), pd.DataFrame()
     if moa_query or moa_in:
         moa_df = search_engine.query(SearchMode.MOA, moa_query, moa_similarity_threshold, moa_in, moa_ex)
+        moa_df = moa_df.rename(columns={'cosine_similarity': 'cosine_similarity_moa'})
     if ar_query or ar_in:
         ar_df = search_engine.query(SearchMode.AR, ar_query, ar_similarity_threshold, ar_in, ar_ex)
+        ar_df = ar_df.rename(columns={'cosine_similarity': 'cosine_similarity_ar'})
 
     no_results_msg = 'No results found. Please try a different query.'
 
-    if (moa_query or moa_in) and (ar_query or ar_in):
-        merge_cols = [c for c in moa_df.columns if c != 'cosine_similarity']
-        df = pd.merge(moa_df, ar_df, how='inner', on=merge_cols, suffixes=('_moa', '_ar'))
-        if df.empty:
-            st.write(no_results_msg)
-            st.stop()
-    elif moa_query or moa_in:
-        df = moa_df.rename(columns={'cosine_similarity': 'Cosine Similarity MOA'})
-    elif ar_query or ar_in:
-        df = ar_df.rename(columns={'cosine_similarity': 'Cosine Similarity AR'})
-    else:
-        st.write(no_results_msg)
+    if not moa_df.empty and not ar_df.empty:
+        merge_cols = [c for c in moa_df.columns if not c.startswith('cosine_similarity')]
+        res_df = pd.merge(moa_df, ar_df, how='inner', on=merge_cols)
+    elif not moa_df.empty:
+        res_df = moa_df
+    elif not ar_df.empty:
+        res_df = ar_df
+
+    if res_df.empty:
+        st.warning(no_results_msg, icon="⚠️")
         st.stop()
 
     # Add a histogram of the cosine similarity scores
@@ -77,7 +77,7 @@ if search_button:
     st.info(warning_msg, icon='⚠')
 
     num_records = st.slider('Number of Records to Display', 1, 500, 100)
-    df = clean_up(df, records=num_records)
+    df = clean_up(res_df, records=num_records)
 
     add_histograms(df)
 
