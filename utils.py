@@ -15,7 +15,7 @@ def __clean_up_column_names(column_names: list) -> list[str]:
     return [c.replace('_', ' ').title().replace('Moa', 'MOA').replace('Ar', 'AR') for c in column_names]
 
 
-def clean_up(df: pd.DataFrame, records: int) -> pd.DataFrame:
+def clean_up(df: pd.DataFrame, records: int, collapse_by_generic_name: bool) -> pd.DataFrame:
     df.columns = __clean_up_column_names(df.columns)
 
     # Make the FDA Link clickable
@@ -25,6 +25,10 @@ def clean_up(df: pd.DataFrame, records: int) -> pd.DataFrame:
     # Move FDA Link to the first column
     cols = ['FDA Link'] + [c for c in df.columns if c != 'FDA Link']
     df = df[cols]
+
+    if collapse_by_generic_name:
+        df.drop_duplicates(subset=['Generic Name'], keep='first', inplace=True)
+
     return df.head(records)
 
 

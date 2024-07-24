@@ -27,6 +27,12 @@ encountering false positives, as it broadens the search to include a wide array 
 """, icon='📈')
 
 # MOA search fields
+col1, col2 = st.columns(2)
+with col1:
+    num_records = st.slider('Number of Records to Display', 1, 1000, 100)
+with col2:
+    collapse = st.checkbox('Collapse Drugs with the Same Generic Name', value=True)
+
 moa_query = st.text_input('Mechanism of Action Query [free text]', 'something that blocks topoisomerase')
 moa_similarity_threshold = st.slider('Mechanism of Action Similarity Threshold', 0.0, 1.0, 0.2)
 col1, col2 = st.columns(2)
@@ -76,8 +82,7 @@ if search_button:
                    'there are no hard boundaries for similarity scores. Please adjust the thresholds accordingly.')
     st.info(warning_msg, icon='⚠')
 
-    num_records = st.slider('Number of Records to Display', 1, 500, 100)
-    df = clean_up(res_df, records=num_records)
+    df = clean_up(res_df, records=num_records, collapse_by_generic_name=collapse)
 
     add_histograms(df)
 
